@@ -93,7 +93,7 @@ resource "oci_core_subnet" "private" {
   prohibit_public_ip_on_vnic = true
 }
 
-# test: nsgs_exist_without_open_ssh
+# test: nsg_rules_follow_least_privilege
 resource "oci_core_network_security_group" "lb" {
   compartment_id = var.compartment_id
   vcn_id         = oci_core_vcn.main.id
@@ -195,7 +195,8 @@ locals {
 }
 
 resource "oci_core_network_security_group_security_rule" "nsg_rules" {
-  for_each = local.nsg_rules
+  for_each  = local.nsg_rules
+  stateless = false
 
   network_security_group_id = each.value.nsg_id
   direction                 = each.value.direction

@@ -9,7 +9,8 @@
 #   [ ] gateways_exist                    - internet/nat/service gateways
 #   [ ] public_route_table_routes_via_igw - oci_core_route_table.public
 #   [ ] private_route_table_has_no_igw    - oci_core_route_table.private
-#   [ ] nsgs_exist_without_open_ssh       - NSGs + their security rules
+#   [ ] nsg_rules_follow_least_privilege  - NSGs + their security rules
+#   [ ] bastion_cidr_rejects_open_world   - var.bastion_allowed_cidr validation
 #   [ ] default_security_list_has_no_ssh  - oci_core_default_security_list.default
 #
 # This file assumes variables.tf will define: compartment_id, vcn_cidr,
@@ -39,10 +40,10 @@ mock_provider "oci" {
 }
 
 variables {
-  compartment_id       = "ocid1.compartment.oc1..test"
-  vcn_cidr             = "10.0.0.0/16"
-  public_subnet_cidr   = "10.0.1.0/24"
-  private_subnet_cidr  = "10.0.2.0/24"
+  compartment_id      = "ocid1.compartment.oc1..test"
+  vcn_cidr            = "10.0.0.0/16"
+  public_subnet_cidr  = "10.0.1.0/24"
+  private_subnet_cidr = "10.0.2.0/24"
   # TEST-NET-3 placeholder, not a real home IP.
   bastion_allowed_cidr = "203.0.113.4/32"
 }
@@ -126,6 +127,10 @@ run "public_route_table_routes_via_igw" {
     ]) == 1
     error_message = "Public route table must send 0.0.0.0/0 to the Internet Gateway"
   }
+  assert {
+    condition     = oci_core_subnet.public.route_table_id == oci_core_route_table.public.id
+    error_message = "Public subnet must use the public route table"
+  }
 }
 
 # Behavior: private route table has no Internet Gateway rule (it should only
@@ -136,44 +141,125 @@ run "private_route_table_has_no_igw" {
   assert {
     condition = length([
       for r in oci_core_route_table.private.route_rules :
-      r if r.network_entity_id == oci_core_internet_gateway.main.id
-    ]) == 0
-    error_message = "Private route table must not route through the Internet Gateway"
-  }
-}
-
-# Behavior: NSGs exist, and no rule allows TCP 22 from 0.0.0.0/0.
-# Needs command = apply: the fleet NSG's SSH rule sources from the bastion
-# NSG's `id`, which (like above) is only known after apply.
-run "nsgs_exist_without_open_ssh" {
-  command = apply
-
-  assert {
-    condition     = oci_core_network_security_group.lb.compartment_id == var.compartment_id
-    error_message = "Load balancer NSG must exist"
-  }
-
-  assert {
-    condition     = oci_core_network_security_group.bastion.compartment_id == var.compartment_id
-    error_message = "Bastion NSG must exist"
-  }
-
-  assert {
-    condition     = oci_core_network_security_group.fleet.compartment_id == var.compartment_id
-    error_message = "Fleet NSG must exist"
+      r if r.destination == "0.0.0.0/0" && r.network_entity_id == oci_core_nat_gateway.main.id
+    ]) == 1
+    error_message = "Private route table must send 0.0.0.0/0 to the NAT Gateway"
   }
 
   assert {
     condition = length([
-      for k, r in oci_core_network_security_group_security_rule.nsg_rules : k
-      if r.direction == "INGRESS"
-      && r.source == "0.0.0.0/0"
-      && r.protocol == "6"
-      && try(r.tcp_options[0].destination_port_range[0].min, null) == 22
-      && try(r.tcp_options[0].destination_port_range[0].max, null) == 22
-    ]) == 0
-    error_message = "No NSG rule may allow TCP 22 from 0.0.0.0/0"
+      for r in oci_core_route_table.private.route_rules :
+      r if r.destination_type == "SERVICE_CIDR_BLOCK" && r.network_entity_id == oci_core_service_gateway.main.id
+    ]) == 1
+    error_message = "Private route table must send Oracle services traffic to the Service Gateway"
   }
+
+  assert {
+    condition     = oci_core_subnet.private.route_table_id == oci_core_route_table.private.id
+    error_message = "Private subnet must use the private route table"
+  }
+}
+
+# Behavior: NSG rules follow least privilege (only the LB is internet-facing,
+# fleet only reachable from LB/bastion NSGs, bastion only from the admin IP).
+# Needs command = apply: the fleet NSG's SSH rule sources from the bastion
+# NSG's `id`, which (like above) is only known after apply.
+run "nsg_rules_follow_least_privilege" {
+  command = apply
+
+  # 1. Exactly one ingress rule accepts traffic from the internet.
+  assert {
+    condition = length([
+      for k, r in oci_core_network_security_group_security_rule.nsg_rules : k
+      if r.direction == "INGRESS" && r.source == "0.0.0.0/0"
+    ]) == 1
+    error_message = "Exactly one ingress rule may be open to 0.0.0.0/0"
+  }
+
+  # 2. That rule belongs to the load balancer and is port 80 only.
+  assert {
+    condition = alltrue([
+      for k, r in oci_core_network_security_group_security_rule.nsg_rules :
+      r.network_security_group_id == oci_core_network_security_group.lb.id
+      && r.tcp_options[0].destination_port_range[0].min == 80
+      && r.tcp_options[0].destination_port_range[0].max == 80
+      if r.direction == "INGRESS" && r.source == "0.0.0.0/0"
+    ])
+    error_message = "The only internet-facing rule must be the load balancer NSG on TCP 80"
+  }
+
+  # 3. Fleet app port (8000) is reachable only from the LB NSG.
+  assert {
+    condition = length([
+      for k, r in oci_core_network_security_group_security_rule.nsg_rules : k
+      if r.network_security_group_id == oci_core_network_security_group.fleet.id
+      && r.direction == "INGRESS"
+      && r.tcp_options[0].destination_port_range[0].min == 8000
+      ]) > 0 && alltrue([
+      for k, r in oci_core_network_security_group_security_rule.nsg_rules :
+      r.source == oci_core_network_security_group.lb.id
+      if r.network_security_group_id == oci_core_network_security_group.fleet.id
+      && r.direction == "INGRESS"
+      && r.tcp_options[0].destination_port_range[0].min == 8000
+    ])
+    error_message = "Fleet port 8000 must be reachable only from the LB NSG"
+  }
+
+  # 4. Fleet SSH (22) is reachable only from the bastion NSG.
+  assert {
+    condition = length([
+      for k, r in oci_core_network_security_group_security_rule.nsg_rules : k
+      if r.network_security_group_id == oci_core_network_security_group.fleet.id
+      && r.direction == "INGRESS"
+      && r.tcp_options[0].destination_port_range[0].min == 22
+      ]) > 0 && alltrue([
+      for k, r in oci_core_network_security_group_security_rule.nsg_rules :
+      r.source == oci_core_network_security_group.bastion.id
+      if r.network_security_group_id == oci_core_network_security_group.fleet.id
+      && r.direction == "INGRESS"
+      && r.tcp_options[0].destination_port_range[0].min == 22
+    ])
+    error_message = "Fleet SSH must be reachable only from the bastion NSG"
+  }
+
+  # 5. Fleet ingress is limited to those two (port, source) pairs.
+  assert {
+    condition = alltrue([
+      for k, r in oci_core_network_security_group_security_rule.nsg_rules :
+      contains([22, 8000], r.tcp_options[0].destination_port_range[0].min)
+      if r.network_security_group_id == oci_core_network_security_group.fleet.id
+      && r.direction == "INGRESS"
+    ])
+    error_message = "Fleet may accept ingress only on ports 22 and 8000"
+  }
+
+  # 6. Bastion accepts traffic only from the admin IP.
+  assert {
+    condition = length([
+      for k, r in oci_core_network_security_group_security_rule.nsg_rules : k
+      if r.network_security_group_id == oci_core_network_security_group.bastion.id
+      && r.direction == "INGRESS"
+      ]) > 0 && alltrue([
+      for k, r in oci_core_network_security_group_security_rule.nsg_rules :
+      r.source == var.bastion_allowed_cidr
+      if r.network_security_group_id == oci_core_network_security_group.bastion.id
+      && r.direction == "INGRESS"
+    ])
+    error_message = "Bastion may accept traffic only from bastion_allowed_cidr"
+  }
+}
+
+# Behavior: an open-to-the-world (or non-/32) bastion CIDR is rejected by
+# variable validation, so the real config can't drift from what the test
+# above exercises with its placeholder IP.
+run "bastion_cidr_rejects_open_world" {
+  command = plan
+
+  variables {
+    bastion_allowed_cidr = "0.0.0.0/0"
+  }
+
+  expect_failures = [var.bastion_allowed_cidr]
 }
 
 # Behavior: the default security list (auto-created with every VCN, and
@@ -186,5 +272,9 @@ run "default_security_list_has_no_ssh" {
   assert {
     condition     = length(oci_core_default_security_list.default.ingress_security_rules) == 0
     error_message = "Default security list must have no ingress rules (use NSGs instead)"
+  }
+  assert {
+    condition     = length(oci_core_default_security_list.default.egress_security_rules) == 0
+    error_message = "Default security list must have no egress rules (use NSGs instead)"
   }
 }

@@ -1,10 +1,15 @@
 services:
   app1:
     build: .
+    image: fleet-app
     hostname: app1
+    environment:
+      APP_VERSION: v1
   app2:
-    build: .
+    image: fleet-app
     hostname: app2
+    environment:
+      APP_VERSION: v1
   nginx:
     image: nginx:alpine
     ports: ["8080:80"]
