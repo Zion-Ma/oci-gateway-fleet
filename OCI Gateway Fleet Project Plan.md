@@ -74,15 +74,15 @@ If any check fails, the trip fails. Use this list every time something breaks.
 
 Set up the account and tools first, so Day 1 is only Terraform.
 
-- [ ] Sign up for OCI. Pick **US East (Ashburn)** as the home region. You cannot change it later, and free resources live only there.
-- [ ] Create a budget alert (for example, email at $10). Billing > Budgets.
-- [ ] Open Governance > Limits, Quotas and Usage. Confirm NAT Gateway and Service Gateway limits are above 0.
-- [ ] Create one compartment named `gateway-lab`. A compartment is a folder for cloud resources. Put everything in it.
-- [ ] On your Mac, install: Terraform, the OCI CLI, Python 3.11 or newer, `tflint`. (Homebrew works for all of them.)
-- [ ] Run `oci setup config`. It creates an API key so Terraform and Python can act as you. Upload the public key in the console under your user profile.
-- [ ] Make an SSH key pair for the servers: `ssh-keygen -t ed25519 -f ~/.ssh/gateway_lab`.
-- [ ] Find your home IP (search "what is my IP"). It goes into the bastion rule.
-- [ ] Create an empty GitHub repo, for example `oci-gateway-fleet`. Add a `.gitignore` for `*.tfstate*`, `.terraform/`, and `*.tfvars` so secrets never get pushed.
+- [x] Sign up for OCI. Pick **US East (Ashburn)** as the home region. You cannot change it later, and free resources live only there.
+- [x] Create a budget alert (for example, email at $10). Billing > Budgets.
+- [x] Open Governance > Limits, Quotas and Usage. Confirm NAT Gateway and Service Gateway limits are above 0.
+- [x] Create one compartment named `gateway-lab`. A compartment is a folder for cloud resources. Put everything in it.
+- [x] On your Mac, install: Terraform, the OCI CLI, Python 3.11 or newer, `tflint`. (Homebrew works for all of them.)
+- [x] Run `oci setup config`. It creates an API key so Terraform and Python can act as you. Upload the public key in the console under your user profile.
+- [x] Make an SSH key pair for the servers: `ssh-keygen -t ed25519 -f ~/.ssh/gateway_lab`.
+- [x] Find your home IP (search "what is my IP"). It goes into the bastion rule.
+- [x] Create an empty GitHub repo, for example `oci-gateway-fleet`. Add a `.gitignore` for `*.tfstate*`, `.terraform/`, and `*.tfvars` so secrets never get pushed.
 
 Never commit API keys, private SSH keys, or state files. State files can contain secrets.
 
@@ -102,7 +102,10 @@ oci-gateway-fleet/
       dev/              main.tf, variables.tf, dev.tfvars
       prod/             same files, different values
   app/
-    app.py              the tiny FastAPI app (about 50 lines)
+    src/app.ts          the tiny Express app in TypeScript (about 50 lines)
+    src/server.ts       starts the app, holds the real network and Object Storage calls
+    tests/app.test.ts   Jest + supertest tests for the app (offline)
+    package.json, tsconfig.json, jest.config.js
     cloud-init.yaml     installs and starts the app when a server boots
     docker-compose.yml  2 app copies behind nginx, for local runs
     nginx.conf
@@ -114,7 +117,7 @@ oci-gateway-fleet/
   tests/
     fixtures/           saved plan files: safe, deletes a gateway, opens SSH
     fakes/              fake load balancer client for offline tests
-    unit/               pytest for the app and tools (offline)
+    unit/               pytest for the tools (offline); the app's Jest tests live in app/tests
     integration/        pytest that checks real cloud behavior
   runbooks/
     lost-egress.md
@@ -132,7 +135,7 @@ Write the test, watch it fail, then write the code that makes it pass. Do everyt
 | Part | Where it is built and tested | Test written first |
 | --- | --- | --- |
 | Terraform logic | Offline, `terraform test` with a mock provider | Yes |
-| App | Mac, Docker Compose with 2 copies behind nginx | Yes, pytest |
+| App (TypeScript) | Mac, Docker Compose with 2 copies behind nginx | Yes, Jest |
 | Plan checker | Mac, saved plan files as input | Yes, pytest |
 | Rolling update logic | Mac, fake load balancer client | Yes, pytest |
 | Network behavior (gateways, routes, NSGs) | Real OCI only | Yes, integration tests written before the build |
@@ -163,7 +166,7 @@ By the end of Day 1, the network module and the app both pass tests you wrote fi
 
 - [ ] Morning, offline. In `modules/network/tests`, write `network.tftest.hcl` with a `mock_provider "oci"` block and these checks first: the VCN uses the CIDR from a variable, the private subnet sets `prohibit_public_ip_on_vnic = true`, the private route table has no Internet Gateway rule, and no NSG rule allows TCP 22 from `0.0.0.0/0`. Run `terraform test` and see them fail.
 - [ ] Write the network module until every check passes: the VCN (`oci_core_vcn`), the three gateways (`oci_core_internet_gateway`, `oci_core_nat_gateway`, `oci_core_service_gateway`, which needs the `oci_core_services` data source), two route tables, two regional subnets, three NSGs and their rules, and `oci_core_default_security_list` without the open SSH rule. Add outputs for the IDs.
-- [ ] App, test first. Write pytest cases for `/health`, `/whoami`, and `/egress` with FastAPI's test client. Then write `app.py`. Keep the Object Storage call behind one small function, so tests can swap in a fake.
+- [ ] App, test first. Write Jest cases for `/health`, `/whoami`, and `/egress` with supertest. Then write `src/app.ts` (Express, TypeScript). Keep the Object Storage and public-site calls behind a small `Deps` interface, so tests can pass in fakes.
 - [ ] Run 2 app copies behind nginx with Docker Compose. Confirm `/whoami` alternates between them.
 - [ ] Evening, cloud. In `envs/dev`, add the `oci` provider with your API key config. Run `plan`, read every line, then `apply`. Check the result in the console. Then `destroy`.
 
@@ -185,12 +188,12 @@ By the end of Day 2, a user can open the load balancer's address in a browser an
 ### New ideas
 
 1. **Instance.** A virtual server (`oci_core_instance`). Use a small shape such as `VM.Standard.E2.1.Micro` with Oracle Linux. The login user is `opc`.
-2. **cloud-init.** A script a server runs on first boot. It installs Python and your app, then starts it. You pass it to the instance as `user_data`.
+2. **cloud-init.** A script a server runs on first boot. It installs Node.js and your app, then starts it. You pass it to the instance as `user_data`.
 3. **Load balancer.** One public address in front of many servers. It sends each request to a healthy server and stops sending to a server whose health check fails.
 4. **Instance principal.** A way for a server to prove who it is to OCI, so the app can write to Object Storage without storing a password. It needs a dynamic group ("all instances in `gateway-lab`") and a policy ("this group may manage objects in this bucket").
 5. **Jump host.** You reach a private server by going through the bastion: `ssh -J opc@<bastion-ip> opc@10.0.2.x`.
 
-### The app (about 50 lines of FastAPI)
+### The app (about 50 lines of TypeScript with Express)
 
 | Endpoint | Returns | What it tests |
 | --- | --- | --- |
@@ -314,7 +317,7 @@ On every pull request, with no cloud credentials needed:
 
 - [ ] `terraform fmt -check`, `terraform validate`, `tflint`.
 - [ ] `terraform test` using a mock provider, so it runs without an OCI account.
-- [ ] pytest unit tests for the tools.
+- [ ] pytest unit tests for the Python tools, and Jest tests for the TypeScript app.
 
 Stretch: run `terraform plan` plus the plan checker in CI, with the OCI key stored as a GitHub secret.
 
