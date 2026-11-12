@@ -11,3 +11,4 @@ __pycache__/
 note.txt
 node_modules/
 dist/
+app/deploy/

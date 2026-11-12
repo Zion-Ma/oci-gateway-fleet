@@ -38,3 +38,30 @@ variable "bastion_allowed_cidr" {
     error_message = "bastion_allowed_cidr must be a single IPv4 address in /32 form (e.g. 203.0.113.4/32)."
   }
 }
+
+# Number of fleet servers; 0 until you are ready to pay for instances.
+variable "fleet_size" {
+  type        = number
+  description = "Number of fleet servers"
+  default     = 0
+}
+
+# Fleet servers use a paid flexible shape (covered by trial credits).
+variable "fleet_shape" {
+  type        = string
+  description = "Compute shape for the fleet servers"
+  default     = "VM.Standard.E5.Flex"
+}
+
+# The bastion stays on the Always Free micro shape.
+variable "bastion_shape" {
+  type        = string
+  description = "Compute shape for the bastion"
+  default     = "VM.Standard.E2.1.Micro"
+}
+
+# Tenancy OCID, used to find the identity domain for the dynamic group.
+variable "tenancy_ocid" {
+  type        = string
+  description = "OCID of the tenancy"
+}
