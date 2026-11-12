@@ -44,9 +44,11 @@ export function createApp(deps: Deps) {
       return;
     }
     try {
-      res.json({ saved: await deps.saveNote(text) });
+      res.status(201).json({ saved: await deps.saveNote(text) }); // 201 Created
     } catch (e) {
-      res.status(502).json({ detail: String(e) }); // storage failed, not the caller's fault
+      // Log the real error for operators; never send it to the caller.
+      console.error("saveNote failed:", e);
+      res.status(502).json({ error: "could not save note" }); // storage failed, not the caller's fault
     }
   });
 

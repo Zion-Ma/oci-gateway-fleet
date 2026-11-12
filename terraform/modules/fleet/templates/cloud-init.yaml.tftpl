@@ -1,0 +1,45 @@
+#cloud-config
+users:
+  - default
+  - name: fleetapp
+    system: true
+    shell: /sbin/nologin
+
+write_files:
+  - path: /opt/fleet-app/server.js
+    encoding: b64
+    content: ${server_js_b64}
+  - path: /opt/fleet-app/package.json
+    encoding: b64
+    content: ${package_json_b64}
+  - path: /etc/systemd/system/fleet-app.service
+    content: |
+      [Unit]
+      Description=Fleet app
+      After=network-online.target
+
+      [Service]
+      User=fleetapp
+      WorkingDirectory=/opt/fleet-app
+      Environment=APP_VERSION=${app_version}
+      Environment=NOTES_BUCKET=${notes_bucket}
+      ExecStart=/usr/bin/node /opt/fleet-app/server.js
+      Restart=on-failure
+      TimeoutStopSec=20
+
+      [Install]
+      WantedBy=multi-user.target
+
+runcmd:
+  - dnf module enable -y nodejs:20
+  - dnf install -y nodejs
+  - cd /opt/fleet-app && npm install --omit=dev
+  - chown -R fleetapp:fleetapp /opt/fleet-app
+  - firewall-cmd --permanent --add-port=8000/tcp
+  - firewall-cmd --reload
+  - systemctl daemon-reload
+  - systemctl enable --now fleet-app
+
+bootcmd:
+  - [ sh, -c, "test -f /swapfile || (fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile)" ]
+  - [ sh, -c, "swapon /swapfile || true" ]

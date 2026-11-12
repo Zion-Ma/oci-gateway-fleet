@@ -164,11 +164,11 @@ By the end of Day 1, the network module and the app both pass tests you wrote fi
 
 ### Tasks
 
-- [ ] Morning, offline. In `modules/network/tests`, write `network.tftest.hcl` with a `mock_provider "oci"` block and these checks first: the VCN uses the CIDR from a variable, the private subnet sets `prohibit_public_ip_on_vnic = true`, the private route table has no Internet Gateway rule, and no NSG rule allows TCP 22 from `0.0.0.0/0`. Run `terraform test` and see them fail.
-- [ ] Write the network module until every check passes: the VCN (`oci_core_vcn`), the three gateways (`oci_core_internet_gateway`, `oci_core_nat_gateway`, `oci_core_service_gateway`, which needs the `oci_core_services` data source), two route tables, two regional subnets, three NSGs and their rules, and `oci_core_default_security_list` without the open SSH rule. Add outputs for the IDs.
-- [ ] App, test first. Write Jest cases for `/health`, `/whoami`, and `/egress` with supertest. Then write `src/app.ts` (Express, TypeScript). Keep the Object Storage and public-site calls behind a small `Deps` interface, so tests can pass in fakes.
-- [ ] Run 2 app copies behind nginx with Docker Compose. Confirm `/whoami` alternates between them.
-- [ ] Evening, cloud. In `envs/dev`, add the `oci` provider with your API key config. Run `plan`, read every line, then `apply`. Check the result in the console. Then `destroy`.
+- [x] Morning, offline. In `modules/network/tests`, write `network.tftest.hcl` with a `mock_provider "oci"` block and these checks first: the VCN uses the CIDR from a variable, the private subnet sets `prohibit_public_ip_on_vnic = true`, the private route table has no Internet Gateway rule, and no NSG rule allows TCP 22 from `0.0.0.0/0`. Run `terraform test` and see them fail.
+- [x] Write the network module until every check passes: the VCN (`oci_core_vcn`), the three gateways (`oci_core_internet_gateway`, `oci_core_nat_gateway`, `oci_core_service_gateway`, which needs the `oci_core_services` data source), two route tables, two regional subnets, three NSGs and their rules, and `oci_core_default_security_list` without the open SSH rule. Add outputs for the IDs.
+- [x] App, test first. Write Jest cases for `/health`, `/whoami`, and `/egress` with supertest. Then write `src/app.ts` (Express, TypeScript). Keep the Object Storage and public-site calls behind a small `Deps` interface, so tests can pass in fakes.
+- [x] Run 2 app copies behind nginx with Docker Compose. Confirm `/whoami` alternates between them.
+- [x] Evening, cloud. In `envs/dev`, add the `oci` provider with your API key config. Run `plan`, read every line, then `apply`. Check the result in the console. Then `destroy`.
 
 ### Done when
 
