@@ -17,9 +17,10 @@ resource "oci_ons_subscription" "email" {
 }
 
 locals {
-  # Metric name as written on Oracle's Load Balancer metrics page (oci_lbaas
-  # namespace). Names in alarm queries are case-sensitive.
-  unhealthy_backend_metric = "unhealthyBackendServers"
+  # Metric name exactly as the Monitoring API lists it for the oci_lbaas
+  # namespace (list_metrics). Oracle's metrics page spells it differently
+  # (unhealthyBackendServers), so do not copy the name from the docs.
+  unhealthy_backend_metric = "UnHealthyBackendServers"
 }
 
 # Alarm: any unhealthy backend in this load balancer, for 1 minute. The metric

@@ -298,8 +298,8 @@ run "unhealthy_backend_sends_email" {
   }
 
   assert {
-    condition     = strcontains(oci_monitoring_alarm.unhealthy_backend.query, "unhealthyBackendServers") && strcontains(oci_monitoring_alarm.unhealthy_backend.query, oci_load_balancer_load_balancer.main.id)
-    error_message = "The alarm query must use unhealthyBackendServers for this load balancer"
+    condition     = strcontains(oci_monitoring_alarm.unhealthy_backend.query, "UnHealthyBackendServers") && strcontains(oci_monitoring_alarm.unhealthy_backend.query, oci_load_balancer_load_balancer.main.id)
+    error_message = "The alarm query must use UnHealthyBackendServers for this load balancer"
   }
 
   # Fires on any unhealthy backend (more than zero), once it lasts 1 minute.
