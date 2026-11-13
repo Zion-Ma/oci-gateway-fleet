@@ -99,3 +99,10 @@ variable "notes_bucket_name" {
   description = "Name of the private Object Storage bucket for notes"
   default     = "gateway-lab-notes"
 }
+
+# Where alarm emails go. Sensitive, and set in dev.tfvars (never committed).
+variable "alarm_email" {
+  type        = string
+  description = "Email address that receives the unhealthy-backend alarm"
+  sensitive   = true
+}

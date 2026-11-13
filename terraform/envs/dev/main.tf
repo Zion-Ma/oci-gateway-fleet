@@ -15,6 +15,7 @@ module "fleet" {
   fleet_nsg_id      = module.network.fleet_nsg_id
   lb_nsg_id         = module.network.lb_nsg_id
   tenancy_id        = var.tenancy_ocid
+  alarm_email       = var.alarm_email
   ssh_public_key    = file(pathexpand("~/.ssh/gateway_lab.pub"))
   fleet_size        = var.fleet_size
   fleet_shape       = var.fleet_shape
