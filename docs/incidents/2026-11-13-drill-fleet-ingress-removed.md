@@ -16,3 +16,6 @@ I undid the change and applied it. The undo ended at 03:43:06. The last failing 
 
 ## Lesson
 This fault takes down the whole app, and the plan checker passes it. This is a known gap. Removing a rule is as dangerous as deleting a gateway. The checker should look at which rules disappear, not only at which resources are on the protected list.
+
+## Follow up: still open
+The new checker rules cover removed route rules and `block_traffic`. They do not cover this drill. A removed security rule is still not blocked.

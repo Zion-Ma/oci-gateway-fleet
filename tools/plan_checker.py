@@ -1,4 +1,9 @@
-"""Check a `terraform show -json` plan and block unsafe changes."""
+"""Check a `terraform show -json` plan and block unsafe changes.
+
+Blocked unless --allow-destroy: deleting or replacing a protected resource,
+removing a route rule, and turning on block_traffic on a NAT or Service Gateway.
+Always blocked: ingress from 0.0.0.0/0 that includes port 22.
+"""
 import json
 import sys
 
@@ -9,6 +14,10 @@ PROTECTED_TYPES: set[str] = {
     "oci_core_vcn",
     "oci_core_internet_gateway",
 }
+# Gateways that carry traffic. Setting block_traffic on them cuts that traffic.
+GATEWAY_TYPES: set[str] = {"oci_core_nat_gateway", "oci_core_service_gateway"}
+# Route table type, whose rules decide where traffic goes.
+ROUTE_TABLE_TYPE: str = "oci_core_route_table"
 # NSG rule type that controls network access.
 RULE_TYPE: str = "oci_core_network_security_group_security_rule"
 # Source that means "the whole internet".
@@ -36,6 +45,19 @@ def _open_ports(after: dict) -> tuple[int, int] | None:
     return (ranges[0]["min"], ranges[0]["max"])
 
 
+def _route_keys(rules: list[dict] | None) -> set[tuple]:
+    """Identify each route rule by where it sends traffic.
+
+    Computed fields (such as cidr_block) can be unset in the plan's after value,
+    so only the fields that define the route are compared.
+    """
+    # A missing list means no rules.
+    return {
+        (r.get("destination"), r.get("destination_type"), r.get("network_entity_id"))
+        for r in (rules or [])
+    }
+
+
 def check_plan(plan: dict, allow_destroy: bool = False) -> list[str]:
     """Return a list of violations. Empty list means safe."""
     # Collect one message per problem.
@@ -49,6 +71,21 @@ def check_plan(plan: dict, allow_destroy: bool = False) -> list[str]:
         # A delete (or replace) of a protected resource needs the flag.
         if rc.get("type") in PROTECTED_TYPES and "delete" in actions and not allow_destroy:
             violations.append(f"{address}: would be destroyed ({'+'.join(actions)})")
+        # An update that removes a route rule cuts a path, so it needs the flag.
+        if rc.get("type") == ROUTE_TABLE_TYPE and "update" in actions and not allow_destroy:
+            # Rules that were there before and are gone after.
+            gone: set[tuple] = _route_keys((change.get("before") or {}).get("route_rules")) - _route_keys(
+                (change.get("after") or {}).get("route_rules")
+            )
+            for dest, _dtype, _entity in sorted(gone, key=str):
+                violations.append(f"{address}: route rule to {dest} would be removed")
+        # An update that turns block_traffic on cuts a gateway, so it needs the flag.
+        if rc.get("type") in GATEWAY_TYPES and "update" in actions and not allow_destroy:
+            # Blocked now, and not blocked before.
+            if (change.get("after") or {}).get("block_traffic") is True and not (
+                (change.get("before") or {}).get("block_traffic")
+            ):
+                violations.append(f"{address}: block_traffic would be turned on")
         # Open ports are always blocked, flag or not.
         if rc.get("type") == RULE_TYPE and "create" in actions:
             ports: tuple[int, int] | None = _open_ports(change.get("after") or {})
