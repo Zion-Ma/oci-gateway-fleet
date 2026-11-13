@@ -79,3 +79,75 @@ def test_health_timeouts_retry_with_backoff() -> None:
     assert sleeps == [1, 2]
     # The rollout still finished.
     assert lb.drained == set()
+
+
+def test_backends_from_outputs() -> None:
+    """Backend names are "<ip>:8000", in the order Terraform lists the servers."""
+    # Import here: the helper is new.
+    from rolling_update import backends_from_outputs
+
+    # Two servers from a fake `terraform output -json` result.
+    outputs: dict = {"fleet_private_ips": {"value": ["10.0.2.204", "10.0.2.251"]}}
+    # Port 8000 is added, order is kept.
+    assert backends_from_outputs(outputs) == ["10.0.2.204:8000", "10.0.2.251:8000"]
+
+
+def test_progress_is_logged() -> None:
+    """Each step is reported through the log function, so a live run shows progress."""
+    # Collect the messages.
+    messages: list[str] = []
+    # A healthy single-server rollout.
+    rolling_update(["b1"], FakeLoadBalancer({}), lambda b, v: None, "v2", "v1",
+                   drain_wait_s=0, sleep=lambda s: None, log=messages.append)
+    # The log mentions the server and each step.
+    text: str = "\n".join(messages)
+    for word in ("b1", "drain", "update", "healthy", "undrain"):
+        assert word in text
+
+
+def test_failure_reason_is_kept() -> None:
+    """If update_server fails, its error text reaches the final error and the log."""
+    # b1's first update raises; the rollback call works.
+    calls: list[str] = []
+
+    def update_server(backend: str, version: str) -> None:
+        """Fail on the new version, succeed on the old one."""
+        calls.append(version)
+        if version == "v2":
+            raise RuntimeError("Permission denied")
+
+    # Collect log lines.
+    messages: list[str] = []
+    # The rollout stops with the reason in the error.
+    with pytest.raises(RollingUpdateError, match="Permission denied"):
+        rolling_update(["b1"], FakeLoadBalancer({}), update_server, "v2", "v1",
+                       drain_wait_s=0, sleep=lambda s: None, log=messages.append)
+    # It tried v2 then rolled back to v1, and logged the reason.
+    assert calls == ["v2", "v1"]
+    assert any("Permission denied" in m for m in messages)
+
+
+def test_failed_rollback_leaves_server_drained_and_says_so() -> None:
+    """If the rollback itself fails, the server stays drained and a clear error is raised."""
+    # Import here: the error type is new.
+    from rolling_update import RollbackError
+
+    # Every update fails, so the rollback fails too.
+    def update_server(backend: str, version: str) -> None:
+        """Always fail."""
+        raise RuntimeError("ssh timed out")
+
+    # A load balancer to inspect afterwards, and a log to read.
+    lb: FakeLoadBalancer = FakeLoadBalancer({})
+    messages: list[str] = []
+    # The rollout stops with the rollback error, which is still a RollingUpdateError.
+    with pytest.raises(RollbackError, match="still drained") as info:
+        rolling_update(["b1", "b2"], lb, update_server, "v2", "v1",
+                       drain_wait_s=0, sleep=lambda s: None, log=messages.append)
+    assert isinstance(info.value, RollingUpdateError)
+    # The broken server must not get traffic: it stays drained.
+    assert lb.drained == {"b1"}
+    # The server after it was never touched.
+    assert not any(c[1] == "b2" for c in lb.calls)
+    # The log says what to do.
+    assert any("ROLLBACK FAILED" in m for m in messages)
