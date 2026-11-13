@@ -16,3 +16,6 @@ I undid the change and applied it. The undo ended at 03:35:56. The first round w
 
 ## Lesson
 Blocking the NAT Gateway breaks only outbound internet from the fleet. The plan checker does not see this fault. It watches deletes and open ports, and this change is neither. This is a known gap in the checker.
+
+## Follow up: plan checker
+The checker now blocks an update that turns `block_traffic` on for a NAT or Service Gateway, unless `--allow-destroy` is set. I tested this with fixtures and unit tests. I did not rerun this drill, so I have not run the checker on the real drill 1 plan.

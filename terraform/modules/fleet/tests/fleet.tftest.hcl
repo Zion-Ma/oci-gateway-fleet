@@ -17,19 +17,21 @@ mock_provider "oci" {
 }
 
 variables {
-  compartment_id    = "ocid1.compartment.oc1..test"
-  public_subnet_id  = "ocid1.subnet.oc1..public"
-  private_subnet_id = "ocid1.subnet.oc1..private"
-  bastion_nsg_id    = "ocid1.nsg.oc1..bastion"
-  fleet_nsg_id      = "ocid1.nsg.oc1..fleet"
-  lb_nsg_id         = "ocid1.nsg.oc1..lb"
-  tenancy_id        = "ocid1.tenancy.oc1..test"
-  alarm_email       = "alerts@example.com"
-  ssh_public_key    = "ssh-ed25519 AAAATEST test"
-  fleet_size        = 3
-  fleet_shape       = "VM.Standard.E5.Flex"
-  bastion_shape     = "VM.Standard.E2.1.Micro"
-  app_dir           = "../../../app/deploy"
+  compartment_id      = "ocid1.compartment.oc1..test"
+  public_subnet_id    = "ocid1.subnet.oc1..public"
+  private_subnet_id   = "ocid1.subnet.oc1..private"
+  bastion_nsg_id      = "ocid1.nsg.oc1..bastion"
+  fleet_nsg_id        = "ocid1.nsg.oc1..fleet"
+  lb_nsg_id           = "ocid1.nsg.oc1..lb"
+  tenancy_id          = "ocid1.tenancy.oc1..test"
+  alarm_email         = "alerts@example.com"
+  ssh_public_key      = "ssh-ed25519 AAAATEST test"
+  fleet_size          = 3
+  fleet_shape         = "VM.Standard.E5.Flex"
+  bastion_shape       = "VM.Standard.E2.1.Micro"
+  app_dir             = "../../../app/deploy"
+  vcn_id              = "ocid1.vcn.oc1..test"
+  private_subnet_cidr = "10.0.2.0/24"
 }
 
 # Behavior: fleet servers are private. The count follows var.fleet_size, and
@@ -320,5 +322,68 @@ run "unhealthy_backend_sends_email" {
   assert {
     condition     = oci_monitoring_alarm.unhealthy_backend.is_enabled == true
     error_message = "The alarm must be enabled"
+  }
+}
+
+# Behavior: Object Storage accepts note writes only through the VCN's Service
+# Gateway. A network source names the VCN and the private subnet range. The
+# policy requires that source by name, next to the bucket name, so a request
+# that falls back to NAT and the public internet is refused.
+run "notes_only_via_service_gateway" {
+  command = plan
+
+  # The network source lives in the tenancy root and has the expected name.
+  assert {
+    condition     = oci_identity_network_source.fleet_vcn.compartment_id == var.tenancy_id
+    error_message = "The network source must be created in the tenancy root"
+  }
+
+  assert {
+    condition     = oci_identity_network_source.fleet_vcn.name == "gateway-lab-fleet-vcn"
+    error_message = "The network source must be named gateway-lab-fleet-vcn"
+  }
+
+  # Exactly one virtual source: this VCN, and only the private subnet range.
+  assert {
+    condition     = length(tolist(oci_identity_network_source.fleet_vcn.virtual_source_list)) == 1
+    error_message = "The network source must have exactly one virtual source"
+  }
+
+  assert {
+    condition     = tolist(oci_identity_network_source.fleet_vcn.virtual_source_list)[0].vcn_id == var.vcn_id
+    error_message = "The virtual source must be var.vcn_id"
+  }
+
+  assert {
+    condition     = toset(tolist(oci_identity_network_source.fleet_vcn.virtual_source_list)[0].ip_ranges) == toset([var.private_subnet_cidr])
+    error_message = "The virtual source must list only the private subnet range"
+  }
+
+  assert {
+    condition     = !contains(tolist(tolist(oci_identity_network_source.fleet_vcn.virtual_source_list)[0].ip_ranges), "0.0.0.0/0")
+    error_message = "The virtual source must not allow 0.0.0.0/0"
+  }
+
+  # No public IP source: the only way in is through the VCN.
+  assert {
+    condition     = length(try(tolist(oci_identity_network_source.fleet_vcn.public_source_list), [])) == 0
+    error_message = "The network source must have no public source list"
+  }
+
+  # The statement has BOTH conditions inside one all { ... } block.
+  assert {
+    condition     = length(regexall("all \\{[^}]*target\\.bucket\\.name='${var.notes_bucket_name}'[^}]*\\}", oci_identity_policy.notes_writer.statements[0])) == 1
+    error_message = "The policy must require the bucket name inside all { ... }"
+  }
+
+  assert {
+    condition     = length(regexall("all \\{[^}]*request\\.networkSource\\.name='gateway-lab-fleet-vcn'[^}]*\\}", oci_identity_policy.notes_writer.statements[0])) == 1
+    error_message = "The policy must require the network source name inside all { ... }"
+  }
+
+  # The old safeguard must not come back: request.vcn.id is deprecated here.
+  assert {
+    condition     = !strcontains(oci_identity_policy.notes_writer.statements[0], "request.vcn.id")
+    error_message = "The policy must not use request.vcn.id"
   }
 }

@@ -47,14 +47,29 @@ resource "oci_identity_domains_dynamic_resource_group" "fleet" {
   matching_rule = "tag.${oci_identity_tag_namespace.gateway_lab.name}.${oci_identity_tag.role.name}.value='fleet'"
 }
 
+# Network source: "requests that come from this VCN, from the private subnet".
+# Object Storage sees the VCN only when a request arrives through the Service
+# Gateway. A request that falls back to NAT arrives from a public address, so
+# it does not match. Network sources live in the tenancy root.
+resource "oci_identity_network_source" "fleet_vcn" {
+  compartment_id = var.tenancy_id
+  name           = "gateway-lab-fleet-vcn"
+  description    = "Private subnet of the gateway lab VCN, seen through the Service Gateway"
+
+  virtual_source_list {
+    vcn_id    = var.vcn_id
+    ip_ranges = [var.private_subnet_cidr]
+  }
+}
+
 # Policy: fleet servers manage objects in this one bucket. It is attached to the
 # gateway-lab compartment itself, which is enough because it only grants access
 # inside that compartment (no root-compartment policy needed).
 resource "oci_identity_policy" "notes_writer" {
   compartment_id = var.compartment_id
   name           = "gateway-lab-notes-writer"
-  description    = "Fleet servers may write notes to the notes bucket only"
+  description    = "Fleet servers may write notes to the notes bucket only, and only through the Service Gateway"
   statements = [
-    "Allow dynamic-group '${var.identity_domain_name}'/'${oci_identity_domains_dynamic_resource_group.fleet.display_name}' to manage objects in compartment id ${var.compartment_id} where target.bucket.name='${oci_objectstorage_bucket.notes.name}'"
+    "Allow dynamic-group '${var.identity_domain_name}'/'${oci_identity_domains_dynamic_resource_group.fleet.display_name}' to manage objects in compartment id ${var.compartment_id} where all {target.bucket.name='${oci_objectstorage_bucket.notes.name}', request.networkSource.name='${oci_identity_network_source.fleet_vcn.name}'}"
   ]
 }
