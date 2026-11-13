@@ -33,3 +33,9 @@ output "lb_public_ip" {
   description = "Public IP of the load balancer"
   value       = module.fleet.lb_public_ip
 }
+
+# OCID of the load balancer, used by tools/lb_client.py.
+output "lb_id" {
+  description = "OCID of the load balancer"
+  value       = module.fleet.lb_id
+}
