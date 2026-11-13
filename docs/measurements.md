@@ -16,3 +16,6 @@ One row per measurement. Newest last. `TODO` means the value is not in the repo 
 | 2026-11-13 | 3 | Drill 3, fleet ingress removed: apply end to 4 failing tests, and undo end to all tests passing | 12 s and 46 s | Same loop |
 | 2026-11-13 | 3 | Drill 4, one server stopped: `STOPPED` to first failing round, and `RUNNING` to all tests passing | 8 s and 61 s | Same loop, with the OCI API for the stop and start |
 | 2026-11-13 | 3 | Plan checker on the three Terraform drill plans | 0 of 3 blocked | `tools/plan_checker.py` on `terraform show -json` of each plan |
+| 2026-11-13 | 3 | Drill 2 rerun after decision 0011: `test_notes_saved` | failed with 502 in both rounds on record (06:08:18 and 06:08:38 UTC); the other 5 tests passed | The same kind of loop, one round about every 20 s. The apply and undo times were not recorded. |
+| 2026-11-13 | 3 | Plan checker on the drill 2 rerun plan | 1 of 1 blocked | `tools/plan_checker.py` on `terraform show -json` of the plan |
+| 2026-11-13 | 3 | Unit tests after the new checker rules | 17 of 17 passing | `pytest tests/unit` |

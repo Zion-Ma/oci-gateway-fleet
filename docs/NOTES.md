@@ -16,6 +16,7 @@ Dates are the date of the git commit that holds the change. Rows and files marke
 - [0008: Bastion on the free shape, fleet on a paid flexible shape](decisions/0008-bastion-free-fleet-paid-shape.md): E2.1.Micro and E5.Flex.
 - [0009: Storage access limited to fleet servers by a tag](decisions/0009-tag-scoped-storage-access.md): dynamic group on a tag, policy on one bucket.
 - [0010: Ship the app with cloud-init](decisions/0010-ship-app-with-cloud-init.md): esbuild bundle, npm install at boot, systemd service.
+- [0011: Object Storage accepts note writes only through the Service Gateway](decisions/0011-notes-only-via-service-gateway.md): a network source and a policy condition. Removing the route now makes `/notes` fail.
 
 ## Incidents
 
@@ -30,7 +31,7 @@ Dates are the date of the git commit that holds the change. Rows and files marke
 - [2026-11-12: LimitExceeded on standard-e2-micro-core-count](incidents/2026-11-12-e2-micro-limit-exceeded.md): fleet moved to E5.Flex.
 - [2026-11-12: In-place resize from E2 Micro to E5.Flex was rejected](incidents/2026-11-12-in-place-resize-rejected.md): used `-replace`.
 - [2026-11-13: Drill 1, NAT Gateway blocked](incidents/2026-11-13-drill-nat-blocked.md): only egress failed. The plan checker did not block it.
-- [2026-11-13: Drill 2, Oracle services route removed](incidents/2026-11-13-drill-service-route-removed.md): nothing failed. The NAT Gateway carried the traffic.
+- [2026-11-13: Drill 2, Oracle services route removed](incidents/2026-11-13-drill-service-route-removed.md): nothing failed, because the NAT Gateway carried the traffic. After decision 0011, the rerun failed `/notes` as wanted.
 - [2026-11-13: Drill 3, fleet ingress on 8000 removed](incidents/2026-11-13-drill-fleet-ingress-removed.md): the whole app failed. The plan checker did not block it.
 - [2026-11-13: Drill 4, one server stopped](incidents/2026-11-13-drill-one-server-stopped.md): the app stayed up through the other server.
 

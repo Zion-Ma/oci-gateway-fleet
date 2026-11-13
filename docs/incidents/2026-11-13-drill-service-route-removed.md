@@ -16,3 +16,12 @@ I undid the change and applied it. The undo ended at 03:39:57, and the tests wer
 
 ## Lesson
 The Service Gateway route is not what makes `/notes` work in this design. The NAT Gateway is a fallback for the same traffic. The Service Gateway keeps Object Storage traffic off the internet path. It does not decide whether the call works. To make `/notes` fail, I would need to remove the service route and block the NAT Gateway together. I did not run that. The plan checker does not see this fault either.
+
+## Follow up: rerun after the fix
+I fixed the gap in [decision 0011](../decisions/0011-notes-only-via-service-gateway.md). Then I made the same break again. All times are UTC.
+
+- The plan checker now has a rule for removed route rules. It printed `BLOCKED: module.network.oci_core_route_table.private: route rule to all-iad-services-in-oracle-services-network would be removed` and exited with 1.
+- After I applied the break, `test_notes_saved` failed with `assert 502 == 201`. The other 5 tests passed. I have two rounds on record, at 06:08:18 and 06:08:38. I did not keep the apply time or the rest of the rounds.
+- I undid the break and all 6 tests passed. I did not record the time of the undo.
+
+The first result was that `/notes` kept working. Now it fails with an error when the route is gone. The gap is closed. This was only one run, and I did not check the cause of the 502 on the servers.
