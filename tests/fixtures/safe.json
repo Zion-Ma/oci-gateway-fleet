@@ -1,0 +1,1 @@
+{"resource_changes": [{"address": "module.fleet.oci_core_instance.fleet[0]", "type": "oci_core_instance", "change": {"actions": ["create"], "after": {"shape": "VM.Standard.E5.Flex"}}}]}

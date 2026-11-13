@@ -13,3 +13,8 @@ output "fleet_instance_ids" {
 output "lb_public_ip" {
   value = oci_load_balancer_load_balancer.main.ip_address_details[0].ip_address
 }
+
+# OCID of the load balancer, so tools can find it.
+output "lb_id" {
+  value = oci_load_balancer_load_balancer.main.id
+}

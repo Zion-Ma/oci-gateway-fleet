@@ -1,0 +1,1 @@
+{"resource_changes": [{"address": "module.network.oci_core_network_security_group_security_rule.ssh", "type": "oci_core_network_security_group_security_rule", "change": {"actions": ["create"], "after": {"direction": "INGRESS", "source": "0.0.0.0/0", "protocol": "6", "tcp_options": [{"destination_port_range": [{"min": 1, "max": 65535}]}]}}}]}
