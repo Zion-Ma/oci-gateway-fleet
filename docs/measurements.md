@@ -11,3 +11,8 @@ One row per measurement. Newest last. `TODO` means the value is not in the repo 
 | 2026-11-12 | 2 | E5.Flex (4 GB) server, instance created to app listening | about 3 min 10 s | `time_created` of the instance (07:14:30 UTC) and the first app line in `journalctl -u fleet-app` (07:17:41 UTC) |
 | TODO | 2 | Load balancer split in a 6-request check | 3 requests to each of 2 servers | TODO |
 | 2026-11-12 | 2 | Integration tests | 6 of 6 passing | `pytest tests/integration` (stated in the Day 2 commit message) |
+| 2026-11-13 | 3 | Drill 1, NAT blocked: apply end to first failing round, and undo end to all tests passing | 11 s and 11 s | A loop that ran `pytest tests/integration` about every 12 s and logged the start time in UTC. Each time is accurate to about 12 s. The loop script is not kept in the repo. |
+| 2026-11-13 | 3 | Drill 2, Oracle services route removed: time with no failing test | 2 min 14 s, none failed | Same loop |
+| 2026-11-13 | 3 | Drill 3, fleet ingress removed: apply end to 4 failing tests, and undo end to all tests passing | 12 s and 46 s | Same loop |
+| 2026-11-13 | 3 | Drill 4, one server stopped: `STOPPED` to first failing round, and `RUNNING` to all tests passing | 8 s and 61 s | Same loop, with the OCI API for the stop and start |
+| 2026-11-13 | 3 | Plan checker on the three Terraform drill plans | 0 of 3 blocked | `tools/plan_checker.py` on `terraform show -json` of each plan |

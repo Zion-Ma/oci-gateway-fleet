@@ -29,6 +29,10 @@ Dates are the date of the git commit that holds the change. Rows and files marke
 - [2026-11-12: A1.Flex had no host capacity](incidents/2026-11-12-a1-flex-no-capacity.md): moved to x86 shapes.
 - [2026-11-12: LimitExceeded on standard-e2-micro-core-count](incidents/2026-11-12-e2-micro-limit-exceeded.md): fleet moved to E5.Flex.
 - [2026-11-12: In-place resize from E2 Micro to E5.Flex was rejected](incidents/2026-11-12-in-place-resize-rejected.md): used `-replace`.
+- [2026-11-13: Drill 1, NAT Gateway blocked](incidents/2026-11-13-drill-nat-blocked.md): only egress failed. The plan checker did not block it.
+- [2026-11-13: Drill 2, Oracle services route removed](incidents/2026-11-13-drill-service-route-removed.md): nothing failed. The NAT Gateway carried the traffic.
+- [2026-11-13: Drill 3, fleet ingress on 8000 removed](incidents/2026-11-13-drill-fleet-ingress-removed.md): the whole app failed. The plan checker did not block it.
+- [2026-11-13: Drill 4, one server stopped](incidents/2026-11-13-drill-one-server-stopped.md): the app stayed up through the other server.
 
 ## Measurements
 
