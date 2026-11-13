@@ -35,5 +35,5 @@ resource "oci_monitoring_alarm" "unhealthy_backend" {
   pending_duration      = "PT1M"
   is_enabled            = true
   destinations          = [oci_ons_notification_topic.alerts.id]
-  body                  = "The gateway lab load balancer reports an unhealthy backend. Start with the runbooks in docs/runbooks."
+  body                  = "The gateway lab load balancer reports an unhealthy backend.\nRunbook: https://github.com/Zion-Ma/oci-gateway-fleet/blob/main/runbooks/backend-unhealthy.md"
 }
