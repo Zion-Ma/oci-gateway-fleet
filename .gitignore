@@ -12,4 +12,6 @@ note.txt
 node_modules/
 dist/
 app/deploy/
-docs/
+
+# Personal planning notes, kept locally
+OCI Gateway Fleet Project Plan.md

@@ -29,7 +29,7 @@ variable "private_subnet_cidr" {
 
 variable "bastion_allowed_cidr" {
   type        = string
-  description = "108.236.198.55/32, the only source allowed to SSH to the bastion"
+  description = "Single admin IP in /32 form (for example 203.0.113.4/32), the only source allowed to SSH to the bastion"
   # No default on purpose: each environment must set its own admin IP,
   # so nobody gets SSH access by accident.
 
