@@ -1,6 +1,7 @@
 """Check a `terraform show -json` plan and block unsafe changes.
 
-Blocked unless --allow-destroy: deleting or replacing a protected resource,
+Blocked unless --allow-destroy: deleting or replacing a protected resource
+(NAT and internet gateways, subnets, the VCN, security rules),
 removing a route rule, and turning on block_traffic on a NAT or Service Gateway.
 Always blocked: ingress from 0.0.0.0/0 that includes port 22.
 """
@@ -13,6 +14,8 @@ PROTECTED_TYPES: set[str] = {
     "oci_core_subnet",
     "oci_core_vcn",
     "oci_core_internet_gateway",
+    # A removed security rule can cut all traffic (drill 3), so it needs the flag too.
+    "oci_core_network_security_group_security_rule",
 }
 # Gateways that carry traffic. Setting block_traffic on them cuts that traffic.
 GATEWAY_TYPES: set[str] = {"oci_core_nat_gateway", "oci_core_service_gateway"}
