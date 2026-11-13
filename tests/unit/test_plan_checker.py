@@ -73,3 +73,52 @@ def test_cli_exit_code() -> None:
     )
     # Blocked means exit code 1.
     assert result.returncode == 1
+
+
+def test_route_rule_removed() -> None:
+    """Removing a route rule from a route table (an update) is one violation."""
+    # Run the check on the plan.
+    violations: list[str] = check_plan(load("removes_route_rule.json"))
+    # One violation, and it names the route table.
+    assert len(violations) == 1
+    assert "module.network.oci_core_route_table.private" in violations[0]
+
+
+def test_route_rule_removed_allowed() -> None:
+    """allow_destroy=True lets a removed route rule through."""
+    # No violations expected.
+    assert check_plan(load("removes_route_rule.json"), allow_destroy=True) == []
+
+
+def test_route_rule_added_ok() -> None:
+    """Keeping every rule and adding one is safe, even if a computed field is unset."""
+    # No violations expected.
+    assert check_plan(load("adds_route_rule.json")) == []
+
+
+def test_nat_blocked() -> None:
+    """Setting block_traffic from false to true on the NAT gateway is one violation."""
+    # Run the check on the plan.
+    violations: list[str] = check_plan(load("blocks_nat.json"))
+    # One violation, and it names the gateway.
+    assert len(violations) == 1
+    assert "module.network.oci_core_nat_gateway.main" in violations[0]
+
+
+def test_service_gateway_blocked() -> None:
+    """The same change on the Service Gateway is one violation."""
+    # One violation expected.
+    assert len(check_plan(load("blocks_service_gateway.json"))) == 1
+
+
+def test_block_traffic_allowed() -> None:
+    """allow_destroy=True lets block_traffic through on both gateways."""
+    # Neither plan should give a violation.
+    assert check_plan(load("blocks_nat.json"), allow_destroy=True) == []
+    assert check_plan(load("blocks_service_gateway.json"), allow_destroy=True) == []
+
+
+def test_nat_unblocked_ok() -> None:
+    """Going from blocked back to open (the undo) is safe."""
+    # No violations expected.
+    assert check_plan(load("unblocks_nat.json")) == []

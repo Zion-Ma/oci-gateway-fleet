@@ -99,3 +99,16 @@ variable "notes_bucket_name" {
   description = "Name of the private Object Storage bucket for notes"
   default     = "gateway-lab-notes"
 }
+
+# VCN that holds the fleet (from the network module's output). The network
+# source for Object Storage names it.
+variable "vcn_id" {
+  type        = string
+  description = "OCID of the VCN; the Object Storage network source allows only this VCN"
+}
+
+# Range of the private subnet (fleet servers). Only this range is allowed.
+variable "private_subnet_cidr" {
+  type        = string
+  description = "IP range of the private subnet; the only range the network source allows"
+}
