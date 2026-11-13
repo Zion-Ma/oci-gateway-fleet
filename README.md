@@ -2,6 +2,15 @@
 
 A small private network on Oracle Cloud (OCI), built with Terraform. A tiny app runs on a fleet of servers inside it. The point of the project is the network and the operations around it: changing it safely, breaking it on purpose, and fixing it with runbooks.
 
+## Results
+
+Measured on the live system. Times come from a test loop that ran about every 12 seconds, so each is accurate to about 12 seconds. Details and sources are in [docs/measurements.md](docs/measurements.md).
+
+- **Drills.** One server stopped: the app kept serving through the other server, and all tests passed 61 s after it restarted. Fleet NSG rule for port 8000 removed: the whole app failed, and recovery took 46 s after the undo apply. NAT Gateway blocked: only `/egress` failed, and recovery took 11 s.
+- **A silent fallback, found and closed.** With the Oracle services route removed, `/notes` kept working through the NAT Gateway, so the Service Gateway was not enforced. A network source plus a policy condition now makes `/notes` fail with 502 instead ([decision 0011](docs/decisions/0011-notes-only-via-service-gateway.md)).
+- **Plan checker.** It blocked 0 of the 3 original drill plans, which showed its gaps. After new rules for removed route rules, `block_traffic` and removed security rules, it blocked the rerun of drill 2 (1 of 1).
+- **Tests.** 6 live integration tests, 10 offline Terraform tests in the fleet module, and 46 Python unit tests, all passing.
+
 ## What it builds
 
 ```
@@ -147,7 +156,9 @@ Planned breaks, with times from an integration-test loop that ran about every 12
 | Fleet NSG rule for port 8000 removed | The whole app | 46 s |
 | One server stopped | `test_whoami_covers_all_servers` only; the other server kept serving | 61 s after the server was running |
 
-Drills 1 to 3 showed gaps in the plan checker, and some are now closed. The engineering log (decisions and incident notes) is kept locally in `docs/`, which is git-ignored.
+Drills 1 to 3 showed gaps in the plan checker. The checker now covers all three, with unit tests. Only drill 2 was rerun on the live system.
+
+The engineering log is in [docs/NOTES.md](docs/NOTES.md): one file per decision and per incident, written as they happened, and a measurements table.
 
 ## Safety notes
 
