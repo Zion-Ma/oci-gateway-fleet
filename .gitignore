@@ -12,3 +12,4 @@ note.txt
 node_modules/
 dist/
 app/deploy/
+docs/

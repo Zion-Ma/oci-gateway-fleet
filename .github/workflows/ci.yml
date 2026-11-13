@@ -1,0 +1,104 @@
+# CI: runs on every pull request and on every push to main.
+# It needs no cloud credentials. The integration tests (tests/integration) need the
+# live cloud, so they never run here.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# The jobs only read the repository.
+permissions:
+  contents: read
+
+# A new push to the same pull request cancels the older run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Terraform formatting, validation, and the offline mock-provider tests.
+  terraform:
+    name: "Terraform: fmt, validate, mock tests"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      # A version that supports mock_provider (1.7 or newer). Same version as local.
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.17.1
+          terraform_wrapper: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      # The fleet module's tests read app/deploy/server.js and package.json with
+      # filebase64(). That folder is not in git, so build it here.
+      - name: Build app/deploy (the fleet tests read it)
+        working-directory: app
+        run: |
+          npm ci
+          npm run bundle
+          npm run deploy-pkg
+
+      - name: terraform fmt -check
+        run: terraform fmt -check -recursive terraform
+
+      - name: Validate and test each module
+        run: |
+          for module in network fleet; do
+            echo "::group::terraform/modules/$module"
+            (
+              cd "terraform/modules/$module"
+              terraform init -backend=false -input=false
+              terraform validate
+              terraform test
+            )
+            echo "::endgroup::"
+          done
+
+  # The TypeScript app: unit tests and a type-checked build.
+  app:
+    name: "App: tests and build"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+  # The Python tools: plan checker, load probe, SSH deploy, rolling update.
+  python:
+    name: "Python: unit tests"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - run: pip install -r requirements-dev.txt
+
+      # Unit tests only. tests/integration needs the live cloud and is never run in CI.
+      - run: pytest tests/unit -v

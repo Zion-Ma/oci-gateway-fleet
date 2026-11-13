@@ -100,6 +100,13 @@ variable "notes_bucket_name" {
   default     = "gateway-lab-notes"
 }
 
+# Where alarm emails go. Sensitive, and set in dev.tfvars (never committed).
+variable "alarm_email" {
+  type        = string
+  description = "Email address that receives the unhealthy-backend alarm"
+  sensitive   = true
+}
+
 # VCN that holds the fleet (from the network module's output). The network
 # source for Object Storage names it.
 variable "vcn_id" {

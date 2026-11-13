@@ -122,3 +122,18 @@ def test_nat_unblocked_ok() -> None:
     """Going from blocked back to open (the undo) is safe."""
     # No violations expected.
     assert check_plan(load("unblocks_nat.json")) == []
+
+
+def test_nsg_rule_deleted() -> None:
+    """Deleting a security rule is one violation that names the rule."""
+    # Run the check on the plan.
+    violations: list[str] = check_plan(load("deletes_nsg_rule.json"))
+    # One violation, and it names the rule's address.
+    assert len(violations) == 1
+    assert "fleet_ingress_app" in violations[0]
+
+
+def test_nsg_rule_deleted_allowed() -> None:
+    """allow_destroy=True lets a deleted security rule through."""
+    # No violations expected.
+    assert check_plan(load("deletes_nsg_rule.json"), allow_destroy=True) == []

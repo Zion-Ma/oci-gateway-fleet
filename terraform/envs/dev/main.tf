@@ -16,11 +16,12 @@ module "fleet" {
   fleet_nsg_id        = module.network.fleet_nsg_id
   lb_nsg_id           = module.network.lb_nsg_id
   tenancy_id          = var.tenancy_ocid
-  vcn_id              = module.network.vcn_id
-  private_subnet_cidr = var.private_subnet_cidr
+  alarm_email         = var.alarm_email
   ssh_public_key      = file(pathexpand("~/.ssh/gateway_lab.pub"))
   fleet_size          = var.fleet_size
   fleet_shape         = var.fleet_shape
   bastion_shape       = var.bastion_shape
   app_dir             = "${path.root}/../../../app/deploy"
+  vcn_id              = module.network.vcn_id
+  private_subnet_cidr = var.private_subnet_cidr
 }

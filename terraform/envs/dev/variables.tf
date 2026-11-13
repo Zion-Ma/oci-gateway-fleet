@@ -65,3 +65,10 @@ variable "tenancy_ocid" {
   type        = string
   description = "OCID of the tenancy"
 }
+
+# Email address for alarm notifications. Set it in dev.tfvars, which is not committed.
+variable "alarm_email" {
+  type        = string
+  description = "Email address that receives the unhealthy-backend alarm"
+  sensitive   = true
+}

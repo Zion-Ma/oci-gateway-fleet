@@ -24,13 +24,14 @@ variables {
   fleet_nsg_id        = "ocid1.nsg.oc1..fleet"
   lb_nsg_id           = "ocid1.nsg.oc1..lb"
   tenancy_id          = "ocid1.tenancy.oc1..test"
-  vcn_id              = "ocid1.vcn.oc1..test"
-  private_subnet_cidr = "10.0.2.0/24"
+  alarm_email         = "alerts@example.com"
   ssh_public_key      = "ssh-ed25519 AAAATEST test"
   fleet_size          = 3
   fleet_shape         = "VM.Standard.E5.Flex"
   bastion_shape       = "VM.Standard.E2.1.Micro"
   app_dir             = "../../../app/deploy"
+  vcn_id              = "ocid1.vcn.oc1..test"
+  private_subnet_cidr = "10.0.2.0/24"
 }
 
 # Behavior: fleet servers are private. The count follows var.fleet_size, and
@@ -263,6 +264,64 @@ run "bastion_has_no_role_tag" {
   assert {
     condition     = alltrue([for i in oci_core_instance.fleet : i.defined_tags["gateway-lab.role"] == "fleet"])
     error_message = "Fleet servers must carry the gateway-lab.role tag"
+  }
+}
+
+# Behavior: an email arrives when any backend is unhealthy for 1 minute. A topic
+# holds the email subscription, and an alarm on the load balancer's unhealthy
+# backend count publishes to that topic. Ids are known only after apply, so this
+# run uses the mock provider's apply (creates nothing real).
+run "unhealthy_backend_sends_email" {
+  command = apply
+
+  # The topic lives in the project compartment.
+  assert {
+    condition     = oci_ons_notification_topic.alerts.compartment_id == var.compartment_id
+    error_message = "The topic must be in var.compartment_id"
+  }
+
+  # The subscription sends email to the address from the variable, on that topic.
+  assert {
+    condition     = oci_ons_subscription.email.protocol == "EMAIL" && oci_ons_subscription.email.endpoint == var.alarm_email
+    error_message = "The subscription must be EMAIL to var.alarm_email"
+  }
+
+  assert {
+    condition     = oci_ons_subscription.email.topic_id == oci_ons_notification_topic.alerts.id
+    error_message = "The subscription must be on the alerts topic"
+  }
+
+  # The alarm watches the load balancer service's metrics, for this load balancer.
+  assert {
+    condition     = oci_monitoring_alarm.unhealthy_backend.namespace == "oci_lbaas"
+    error_message = "The alarm must use the oci_lbaas namespace"
+  }
+
+  assert {
+    condition     = strcontains(oci_monitoring_alarm.unhealthy_backend.query, "UnHealthyBackendServers") && strcontains(oci_monitoring_alarm.unhealthy_backend.query, oci_load_balancer_load_balancer.main.id)
+    error_message = "The alarm query must use UnHealthyBackendServers for this load balancer"
+  }
+
+  # Fires on any unhealthy backend (more than zero), once it lasts 1 minute.
+  assert {
+    condition     = strcontains(oci_monitoring_alarm.unhealthy_backend.query, ".max() > 0")
+    error_message = "The alarm must fire when the unhealthy count is above zero"
+  }
+
+  assert {
+    condition     = oci_monitoring_alarm.unhealthy_backend.pending_duration == "PT1M"
+    error_message = "The alarm must wait 1 minute (PT1M) before firing"
+  }
+
+  # It publishes to the alerts topic, and it is switched on.
+  assert {
+    condition     = contains(tolist(oci_monitoring_alarm.unhealthy_backend.destinations), oci_ons_notification_topic.alerts.id)
+    error_message = "The alarm must publish to the alerts topic"
+  }
+
+  assert {
+    condition     = oci_monitoring_alarm.unhealthy_backend.is_enabled == true
+    error_message = "The alarm must be enabled"
   }
 }
 
